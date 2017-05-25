@@ -1,0 +1,8 @@
+{
+  "region": "us-east-1",
+  "apiVersions": {
+    "s3": "2006-03-01",
+    "dynamodbstreams": "2012-08-10"
+  },
+  "endpoint": "http://localhost:4569"
+}

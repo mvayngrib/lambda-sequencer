@@ -1,0 +1,89 @@
+service: dynamodb-based-queues
+
+frameworkVersion: ">=1.1.0 <2.0.0"
+
+plugins:
+  - serverless-dynamodb-local
+  - serverless-offline
+
+custom:
+  dynamodb:
+    start:
+      port: 8000
+      inMemory: true
+      migration: true
+    migration:
+      dir: offline/migrations
+
+provider:
+  name: aws
+  runtime: nodejs6.10
+  stage: dev
+  region: us-east-1
+  environment:
+    DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:DescribeStream
+        - dynamodb:GetRecords
+        - dynamodb:GetShardIterator
+        - dynamodb:ListStreams
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+
+functions:
+  sequence:
+    handler: sequencer.handler
+    events:
+      - stream: arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/QueueItems/stream/*
+  process:
+    handler: processor.handler
+    events:
+      - stream: arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/Cursors/stream/*
+
+resources:
+  Resources:
+    QueueItems:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: QueueItems
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: queueId
+            AttributeType: S
+          - AttributeName: queueSeq
+            AttributeType: N
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+    Cursors:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: Cursors
+        AttributeDefinitions:
+          - AttributeName: queueId
+            AttributeType: S
+          - AttributeName: queueSeq
+            AttributeType: N
+        KeySchema:
+          - AttributeName: queueId
+            KeyType: HASH
+          - AttributeName: queueSeq
+            KeyType: RANGE
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
